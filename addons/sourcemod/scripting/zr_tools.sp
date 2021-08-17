@@ -34,7 +34,7 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 
 public OnPluginStart()
 {
-	CreateConVar("zr_tools_version", PLUGIN_VERSION, "Zombie:Reloaded tools plugin version", FCVAR_PLUGIN|FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_CHEAT|FCVAR_DONTRECORD);
+	CreateConVar("zr_tools_version", PLUGIN_VERSION, "Zombie:Reloaded tools plugin version", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_CHEAT|FCVAR_DONTRECORD);
 	
 	RegAdminCmd("zr_tools_reload", Command_Reload, ADMFLAG_ROOT);
 	
