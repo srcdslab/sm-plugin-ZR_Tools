@@ -3,10 +3,10 @@
 #include <sourcemod>
 #include <zombiereloaded>
 
-#define PLUGIN_VERSION	"1.6.1"
+#define PLUGIN_VERSION	"1.6.2"
 
-new Handle:kv;
-new Handle:hPlayerClasses, String:sClassPath[PLATFORM_MAX_PATH] = "configs/zr/playerclasses.txt";
+new KeyValues:kv;
+new ConVar:hPlayerClasses, String:sClassPath[PLATFORM_MAX_PATH] = "configs/zr/playerclasses.txt";
 new bool:g_RoundEnd = false;
 
 public Plugin:myinfo = 
@@ -44,19 +44,19 @@ public OnPluginStart()
 
 public OnAllPluginsLoaded()
 {
-	if (hPlayerClasses != INVALID_HANDLE)
+	if (hPlayerClasses != null)
 	{
-		UnhookConVarChange(hPlayerClasses, OnClassPathChange);
-		CloseHandle(hPlayerClasses);
+		hPlayerClasses.RemoveChangeHook(OnClassPathChange);
+		delete hPlayerClasses;
 	}
-	if ((hPlayerClasses = FindConVar("zr_config_path_playerclasses")) == INVALID_HANDLE)
+	if ((hPlayerClasses = FindConVar("zr_config_path_playerclasses")) == null)
 	{
 		SetFailState("Zombie:Reloaded is not running on this server");
 	}
-	HookConVarChange(hPlayerClasses, OnClassPathChange);
+	hPlayerClasses.AddChangeHook(OnClassPathChange);
 }
 
-public OnClassPathChange(Handle:convar, const String:oldValue[], const String:newValue[])
+public OnClassPathChange(ConVar:convar, const String:oldValue[], const String:newValue[])
 {
 	strcopy(sClassPath, sizeof(sClassPath), newValue);
 	OnConfigsExecuted();
@@ -64,27 +64,27 @@ public OnClassPathChange(Handle:convar, const String:oldValue[], const String:ne
 
 public OnConfigsExecuted()
 {
-	if (kv != INVALID_HANDLE)
+	if (kv != null)
 	{
-		CloseHandle(kv);
+		delete kv;
 	}
-	kv = CreateKeyValues("classes");
+	kv = new KeyValues("classes");
 	
 	decl String:buffer[PLATFORM_MAX_PATH];
 	BuildPath(Path_SM, buffer, sizeof(buffer), "%s", sClassPath);
 	
-	if (!FileToKeyValues(kv, buffer))
+	if (!kv.ImportFromFile(buffer))
 	{
 		SetFailState("Class data file \"%s\" not found", buffer);
 	}
 }
 
-public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
+public Event_RoundStart(Event:event, const String:name[], bool:dontBroadcast)
 {
 	g_RoundEnd = false;
 }
 
-public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast)
+public Event_RoundEnd(Event:event, const String:name[], bool:dontBroadcast)
 {
 	g_RoundEnd = true;
 }
@@ -112,21 +112,21 @@ public Native_PlayerHasAttribute(Handle:plugin, numParams)
 	ZR_GetClassDisplayName(client, className, sizeof(className), ZR_CLASS_CACHE_PLAYER);
 	
 	new bool:result = false;
-	if (KvGotoFirstSubKey(kv))
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				KvGetString(kv, attrib, buffer, sizeof(buffer), "0");
+				kv.GetString(attrib, buffer, sizeof(buffer), "0");
 				
 				result = bool:(StrContains("yes|1|true", buffer, false) != -1);
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	return result;
 }
@@ -144,21 +144,21 @@ public Native_GetClientAttributeString(Handle:plugin, numParams)
 	ZR_GetClassDisplayName(client, className, sizeof(className), ZR_CLASS_CACHE_PLAYER);
 	
 	new bytes;
-	if (KvGotoFirstSubKey(kv))
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				KvGetString(kv, attrib, buffer, sizeof(buffer), "");
+				kv.GetString(attrib, buffer, sizeof(buffer), "");
 				
 				SetNativeString(3, buffer, GetNativeCell(4), true, bytes);
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	if (!buffer[0])
 	{
@@ -181,19 +181,19 @@ public Native_GetClientAttributeValue(Handle:plugin, numParams)
 	
 	new result = -1;
 	
-	if (KvGotoFirstSubKey(kv))
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				result = KvGetNum(kv, attrib, GetNativeCell(3));
+				result = kv.GetNum(attrib, GetNativeCell(3));
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	return result;
 }
@@ -211,19 +211,19 @@ public Native_GetClientAttributeValueFloat(Handle:plugin, numParams)
 	
 	new Float:result = -1.0;
 	
-	if (KvGotoFirstSubKey(kv))
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				result = KvGetFloat(kv, attrib, Float:GetNativeCell(3));
+				result = kv.GetFloat(attrib, Float:GetNativeCell(3));
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	return _:result;
 }
@@ -237,21 +237,21 @@ public Native_GetClientClassSectionName(Handle:plugin, numParams)
 	ZR_GetClassDisplayName(client, className, sizeof(className), ZR_CLASS_CACHE_PLAYER);
 	
 	new bytes;
-	if (KvGotoFirstSubKey(kv))
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				KvGetSectionName(kv, buffer, sizeof(buffer));
+				kv.GetSectionName(buffer, sizeof(buffer));
 				
 				SetNativeString(2, buffer, GetNativeCell(3), true, bytes);
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	return bytes;
 }
