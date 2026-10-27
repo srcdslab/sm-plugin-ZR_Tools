@@ -1,15 +1,17 @@
 #pragma semicolon 1
+#pragma newdecls required
 
 #include <sourcemod>
 #include <zombiereloaded>
 
-#define PLUGIN_VERSION	"1.6.1"
+#define PLUGIN_VERSION	"1.6.2"
 
-new Handle:kv;
-new Handle:hPlayerClasses, String:sClassPath[PLATFORM_MAX_PATH] = "configs/zr/playerclasses.txt";
-new bool:g_RoundEnd = false;
+KeyValues kv;
+ConVar hPlayerClasses;
+char sClassPath[PLATFORM_MAX_PATH] = "configs/zr/playerclasses.txt";
+bool g_RoundEnd = false;
 
-public Plugin:myinfo = 
+public Plugin myinfo = 
 {
 	name = "[ZR] Tools",
 	author = "FrozDark",
@@ -18,7 +20,7 @@ public Plugin:myinfo =
 	url = "www.hlmod.ru"
 }
 
-public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
 {
 	CreateNative("ZRT_GetClientClassSectionName", Native_GetClientClassSectionName);
 	CreateNative("ZRT_GetClientAttributeString", Native_GetClientAttributeString);
@@ -32,7 +34,7 @@ public APLRes:AskPluginLoad2(Handle:myself, bool:late, String:error[], err_max)
 	return APLRes_Success;
 }
 
-public OnPluginStart()
+public void OnPluginStart()
 {
 	CreateConVar("zr_tools_version", PLUGIN_VERSION, "Zombie:Reloaded tools plugin version", FCVAR_SPONLY|FCVAR_REPLICATED|FCVAR_NOTIFY|FCVAR_CHEAT|FCVAR_DONTRECORD);
 	
@@ -42,123 +44,123 @@ public OnPluginStart()
 	HookEvent("round_end", Event_RoundEnd);
 }
 
-public OnAllPluginsLoaded()
+public void OnAllPluginsLoaded()
 {
-	if (hPlayerClasses != INVALID_HANDLE)
+	if (hPlayerClasses != null)
 	{
-		UnhookConVarChange(hPlayerClasses, OnClassPathChange);
-		CloseHandle(hPlayerClasses);
+		hPlayerClasses.RemoveChangeHook(OnClassPathChange);
+		delete hPlayerClasses;
 	}
-	if ((hPlayerClasses = FindConVar("zr_config_path_playerclasses")) == INVALID_HANDLE)
+	if ((hPlayerClasses = FindConVar("zr_config_path_playerclasses")) == null)
 	{
 		SetFailState("Zombie:Reloaded is not running on this server");
 	}
-	HookConVarChange(hPlayerClasses, OnClassPathChange);
+	hPlayerClasses.AddChangeHook(OnClassPathChange);
 }
 
-public OnClassPathChange(Handle:convar, const String:oldValue[], const String:newValue[])
+public void OnClassPathChange(ConVar convar, const char[] oldValue, const char[] newValue)
 {
 	strcopy(sClassPath, sizeof(sClassPath), newValue);
 	OnConfigsExecuted();
 }
 
-public OnConfigsExecuted()
+public void OnConfigsExecuted()
 {
-	if (kv != INVALID_HANDLE)
+	if (kv != null)
 	{
-		CloseHandle(kv);
+		delete kv;
 	}
-	kv = CreateKeyValues("classes");
+	kv = new KeyValues("classes");
 	
-	decl String:buffer[PLATFORM_MAX_PATH];
+	char buffer[PLATFORM_MAX_PATH];
 	BuildPath(Path_SM, buffer, sizeof(buffer), "%s", sClassPath);
 	
-	if (!FileToKeyValues(kv, buffer))
+	if (!kv.ImportFromFile(buffer))
 	{
 		SetFailState("Class data file \"%s\" not found", buffer);
 	}
 }
 
-public Event_RoundStart(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_RoundStart(Event event, const char[] name, bool dontBroadcast)
 {
 	g_RoundEnd = false;
 }
 
-public Event_RoundEnd(Handle:event, const String:name[], bool:dontBroadcast)
+public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	g_RoundEnd = true;
 }
 
-public Action:Command_Reload(client, args)
+public Action Command_Reload(int client, int args)
 {
 	OnConfigsExecuted();
 	return Plugin_Handled;
 }
 
-public Native_IsRoundActive(Handle:plugin, numParams)
+public any Native_IsRoundActive(Handle plugin, int numParams)
 {
 	return !g_RoundEnd;
 }
 
-public Native_PlayerHasAttribute(Handle:plugin, numParams)
+public any Native_PlayerHasAttribute(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 	ValidateClient(client);
 	
-	decl String:attrib[32];
+	char attrib[32];
 	GetNativeString(2, attrib, sizeof(attrib));
 	
-	decl String:className[64], String:buffer[64];
+	char className[64], buffer[64];
 	ZR_GetClassDisplayName(client, className, sizeof(className), ZR_CLASS_CACHE_PLAYER);
 	
-	new bool:result = false;
-	if (KvGotoFirstSubKey(kv))
+	bool result = false;
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				KvGetString(kv, attrib, buffer, sizeof(buffer), "0");
+				kv.GetString(attrib, buffer, sizeof(buffer), "0");
 				
-				result = bool:(StrContains("yes|1|true", buffer, false) != -1);
+				result = (StrContains("yes|1|true", buffer, false) != -1);
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	return result;
 }
 
-public Native_GetClientAttributeString(Handle:plugin, numParams)
+public int Native_GetClientAttributeString(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 	ValidateClient(client);
 	
-	decl String:attrib[32];
+	char attrib[32];
 	GetNativeString(2, attrib, sizeof(attrib));
 	
-	decl String:className[64], String:buffer[PLATFORM_MAX_PATH];
+	char className[64], buffer[PLATFORM_MAX_PATH];
 	buffer[0] = '\0';
 	ZR_GetClassDisplayName(client, className, sizeof(className), ZR_CLASS_CACHE_PLAYER);
 	
-	new bytes;
-	if (KvGotoFirstSubKey(kv))
+	int bytes;
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				KvGetString(kv, attrib, buffer, sizeof(buffer), "");
+				kv.GetString(attrib, buffer, sizeof(buffer), "");
 				
 				SetNativeString(3, buffer, GetNativeCell(4), true, bytes);
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	if (!buffer[0])
 	{
@@ -168,95 +170,95 @@ public Native_GetClientAttributeString(Handle:plugin, numParams)
 	return bytes;
 }
 
-public Native_GetClientAttributeValue(Handle:plugin, numParams)
+public int Native_GetClientAttributeValue(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 	ValidateClient(client);
 	
-	decl String:attrib[32];
+	char attrib[32];
 	GetNativeString(2, attrib, sizeof(attrib));
 	
-	decl String:className[64], String:buffer[PLATFORM_MAX_PATH];
+	char className[64], buffer[PLATFORM_MAX_PATH];
 	ZR_GetClassDisplayName(client, className, sizeof(className), ZR_CLASS_CACHE_PLAYER);
 	
-	new result = -1;
+	int result = -1;
 	
-	if (KvGotoFirstSubKey(kv))
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				result = KvGetNum(kv, attrib, GetNativeCell(3));
+				result = kv.GetNum(attrib, GetNativeCell(3));
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	return result;
 }
 
-public Native_GetClientAttributeValueFloat(Handle:plugin, numParams)
+public any Native_GetClientAttributeValueFloat(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 	ValidateClient(client);
 	
-	decl String:attrib[32];
+	char attrib[32];
 	GetNativeString(2, attrib, sizeof(attrib));
 	
-	decl String:className[64], String:buffer[PLATFORM_MAX_PATH];
+	char className[64], buffer[PLATFORM_MAX_PATH];
 	ZR_GetClassDisplayName(client, className, sizeof(className), ZR_CLASS_CACHE_PLAYER);
 	
-	new Float:result = -1.0;
+	float result = -1.0;
 	
-	if (KvGotoFirstSubKey(kv))
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				result = KvGetFloat(kv, attrib, Float:GetNativeCell(3));
+				result = kv.GetFloat(attrib, view_as<float>(GetNativeCell(3)));
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
-	return _:result;
+	return result;
 }
 
-public Native_GetClientClassSectionName(Handle:plugin, numParams)
+public int Native_GetClientClassSectionName(Handle plugin, int numParams)
 {
-	new client = GetNativeCell(1);
+	int client = GetNativeCell(1);
 	ValidateClient(client);
 	
-	decl String:className[64], String:buffer[64];
+	char className[64], buffer[64];
 	ZR_GetClassDisplayName(client, className, sizeof(className), ZR_CLASS_CACHE_PLAYER);
 	
-	new bytes;
-	if (KvGotoFirstSubKey(kv))
+	int bytes;
+	if (kv.GotoFirstSubKey())
 	{
 		do
 		{
-			KvGetString(kv, "name", buffer, sizeof(buffer));
+			kv.GetString("name", buffer, sizeof(buffer));
 			if (StrEqual(buffer, className, false))
 			{
-				KvGetSectionName(kv, buffer, sizeof(buffer));
+				kv.GetSectionName(buffer, sizeof(buffer));
 				
 				SetNativeString(2, buffer, GetNativeCell(3), true, bytes);
 				break;
 			}
-		} while (KvGotoNextKey(kv));
+		} while (kv.GotoNextKey());
 	}
-	KvRewind(kv);
+	kv.Rewind();
 	
 	return bytes;
 }
 
-ValidateClient(client)
+void ValidateClient(int client)
 {
 	if (client < 1 || client > MaxClients)
 	{
