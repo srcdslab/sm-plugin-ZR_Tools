@@ -4,7 +4,7 @@
 #include <sourcemod>
 #include <zombiereloaded>
 
-#define PLUGIN_VERSION	"1.6.3"
+#define PLUGIN_VERSION	"1.6.4"
 
 KeyValues kv;
 ConVar hPlayerClasses;
